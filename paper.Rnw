@@ -1,0 +1,1164 @@
+\documentclass[12pt]{article}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{natbib}
+\usepackage{url} % not crucial - just used below for the URL 
+\usepackage{multirow}
+\usepackage{mathtools}
+\usepackage{amsfonts}
+\usepackage{rotating}
+\usepackage{booktabs}
+\usepackage{verbatim}
+\usepackage{mathrsfs}
+\usepackage{hyperref}
+\usepackage{pdflscape}
+\usepackage{caption}
+\usepackage{tablefootnote}
+\usepackage{verbatim}
+\usepackage{setspace}
+\usepackage[utf8]{inputenc}
+\usepackage{authblk}
+\usepackage{pdfpages}
+\usepackage{fancyhdr}
+%\pdfminorversion=4
+% NOTE: To produce blinded version, replace "0" with "1" below.
+\newcommand{\blind}{0}
+
+% DON'T change margins - should be 1 inch all around.
+\addtolength{\oddsidemargin}{-.5in}%
+\addtolength{\evensidemargin}{-.5in}%
+\addtolength{\textwidth}{1in}%
+\addtolength{\textheight}{1.3in}%
+\addtolength{\topmargin}{-.8in}%
+
+\begin{document}
+
+\def\spacingset#1{\renewcommand{\baselinestretch}%
+{#1}\small\normalsize} \spacingset{1}
+
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+
+\if0\blind
+{
+  \title{\bf A Projection Pursuit Forest Algorithm for Supervised Classification}
+  \author{Natalia da Silva\hspace{.2cm}\\
+    Instituto de Estadística (IESTA), Universidad de la República\\
+    and \\
+    Dianne Cook \\
+    Department of Econometrics and Business Statistics, Monash University\\
+    and Eun-Kyung Lee\\
+    Department of Statistics,  Ewha Womans University }
+  \maketitle
+} \fi
+
+\if1\blind
+{
+  \bigskip
+  \bigskip
+  \bigskip
+  \begin{center}
+    {\LARGE\bf Title}
+\end{center}
+  \medskip
+} \fi
+
+\bigskip
+\begin{abstract}
+This paper presents a new ensemble learning method for classification problems called projection pursuit random forest (PPF). PPF uses the \verb# PPtree#  algorithm introduced in \cite{lee2013pptree}. In PPF, trees are constructed by splitting on linear combinations of randomly chosen variables. Projection pursuit is used to choose a projection of the variables that best separates the classes. Utilizing linear combinations of variables to separate classes takes the correlation between variables into account which allows PPF to outperform a traditional random forest when separations between groups occurs in combinations of variables.
+
+The method presented here can be used in multi-class problems and is implemented into an R~\citep{RCore} package, \verb# PPforest#, which is available on CRAN.
+
+\end{abstract}
+
+\noindent%
+{\it Keywords:} data mining, ensemble model, statistical computing, exploratory data analysis, high dimensional data
+\vfill
+
+\newpage
+\spacingset{1.5} % DON'T change the spacing!
+\section{Introduction}
+\label{sec:intro}
+
+There are two main features from a random forest algorithm~\citep{breiman2001random} that are broadly applicable for building ensemble classifiers from any basic method: bootstrap aggregation (bagging) and random predictor selection. Bagging stabilizes the variance~\citep{breiman1996bagging, breiman1996heuristics} and random predictor selection reduces correlation~ \citep{amit1997shape, ho1998random} between trees in the forest (ensemble components).
+
+This paper presents the projection pursuit random forest (PPF), a new ensemble learning method for classification problems, built from trees utilizing combinations of predictors. PPF builds a forest from many projection pursuit trees (PPtree)~\citep{lee2013pptree}, which is available in the R package \verb# PPtreeViz#~\citep{PPtreeViz}. Projection pursuit~\citep{friedman1973projection} is used to find the linear combination of variables that best separates groups, and many different rules to make the actual split are provided.
+
+Trees that use linear combinations of predictors in a split are known in the literature as oblique trees~\citep{kim2001,brodley,tan2005mml,truong2009fast,lee2013pptree}.
+All these algorithms use different approaches for finding linear combinations of predictors upon which to make a split. Some of the methods used for selecting the linear combination include random coefficient generation, linear discriminant analysis, and linear support vector machines. Theoretically, these could also be used as a base underlying PPF.
+
+In the machine learning literature numerous work has been conducted on algorithms for building forests from oblique trees~\citep{tan2006decision, menze2011oblique, do2010classifying}. The performance is reported to be better than random forests. A limitation of building on these approaches is the lack of readily available software.
+
+In a PPF, for each split, a random sample of predictors is selected, an optimal linear combination for separating the classes is computed by using projection pursuit. The algorithm is targeted for problems where classes can be separated by linear combinations of predictors, which define separating hyperplanes that are oblique to the axes rather than orthogonal to them. This may sound like a support vector machine~\citep{Cortes1995}, but the tree construction makes it different -- the separation in linear combinations is examined for subspaces of the high-dimensional space.  PPF also accommodates imbalanced classes by using stratified bootstrap samples, and variable importance measures are computed using the coefficients of the projections. PPF can be used for multi-class problems and is implemented into an R package, called \verb# PPforest#.
+
+PPF can outperform RF, and an application is included to demonstrate this. However, it has the same interpretability and diagnostics as RF, which helps analysts to better understand the data.
+
+This paper is organized as follows. Section \ref{PPT} explains PPtree algorithm underlying PPF. Section \ref{PPFsec} describes the PPF algorithm; diagnostics, including how to compute variable importance and the implementation details. Section \ref{perfsec} evaluates the algorithm performance on benchmark machine learning data in comparison with other tree methods. Section \ref{options} explains the diagnostics in comparison to those from RF, and discusses parameter selection. An application illustrating the power of PPF over other tree methods is provided in Section \ref{rnaapli}. Section \ref{discpp1} discusses possible extensions and future directions.
+
+\section{Background on the projection pursuit tree}
+\label{PPT}
+
+<<libs, echo=FALSE, warning = FALSE, message = FALSE>>=
+library(MASS)
+library(ggplot2)
+library(GGally)
+library(RColorBrewer)
+library(PPtreeViz)
+library(gridExtra)
+library(reshape2)
+library(PPforest)
+library(plyr)
+library(dplyr)
+library(purrr)
+library(xtable)
+library(tidyr)
+library(rpart)
+library(microbenchmark)
+library(tidyr)
+library(randomForest)
+library(forcats)
+library(patchwork)
+library(viridis)
+@
+
+<<utils, echo=FALSE, warning = FALSE, message = FALSE>>=
+grid_arrange_shared_legend <- function(..., ncol = length(list(...)), nrow = 1, position = c("bottom", "right")) {
+
+  plots <- list(...)
+  position <- match.arg(position)
+  g <- ggplotGrob(plots[[1]] + theme(legend.position = position))$grobs
+  legend <- g[[which(sapply(g, function(x) x$name) == "guide-box")]]
+  lheight <- sum(legend$height)
+  lwidth <- sum(legend$width)
+  gl <- lapply(plots, function(x) x + theme(legend.position="none"))
+  gl <- c(gl, ncol = ncol, nrow = nrow)
+
+  combined <- switch(position,
+       "bottom" = arrangeGrob(do.call(arrangeGrob, gl),
+                   legend,
+                   ncol = 1,
+                   heights = unit.c(unit(1, "npc") - lheight, lheight)),
+       "right" = arrangeGrob(do.call(arrangeGrob, gl),
+                   legend,
+                   ncol = 2,
+                   widths = unit.c(unit(1, "npc") - lwidth, lwidth)))
+
+  grid.draw(combined)
+}
+@
+<<sim, cache=FALSE, echo=FALSE>>=
+simu3 <- function(mux1, mux2, muy1, muy2, muz1, muz2,
+                  cor1, cor2, cor3) {
+  set.seed(666)
+  bivn <- mvrnorm(100, mu = c(mux1, mux2),
+                  Sigma = matrix(c(1, cor1, cor1, 1), 2))
+  bivn2 <- mvrnorm(100, mu = c(muy1, muy2),
+                   Sigma = matrix(c(1, cor2, cor2, 1), 2))
+  bivn3 <- mvrnorm(100, mu = c(muz1, muz2),
+                   Sigma = matrix(c(1, cor3, cor3, 1), 2))
+
+  d1 <- data.frame(Sim = "sim1", bivn)
+  d2 <- data.frame(Sim = "sim2", bivn2)
+  d3 <- data.frame(Sim = "sim3", bivn3)
+  rbind(d1, d2, d3)
+}
+
+dat.pl2 <- simu3(-1,0.6,0,-0.6, 2,-1,0.95, 0.95, 0.95)
+dat.plnew <- simu3(0,0.6,0,-0.6, 0,-1,-0.1, -0.1, -0.1)
+
+
+@
+The projection pursuit algorithm searches for low dimensional projections that optimize a function which measures some aspect of interest, for PPtree, this is class separation. \cite{friedman1973projection} coined the term ``projection pursuit'', but the ideas existed earlier than this, and are discussed in~\cite{kruskal1969toward}. Indexes for finding projections that separate classes were developed in~\cite{lee2005projection} (LDA) and~\cite{lee2010projection} (PDA). These form the basis of PPtree, and are explained below.
+
+Let $\mathbf{x}_{gi}$ be a $p$-dimensional data vector, representing the $i^{th}$ observation of the $g^{th}$ class, with $g = 1,\ldots, G$, $G$ is the number of classes, $i = 1,\ldots , n_g$, and $n_g$ is the number of observations in class $g$. The LDA index is defined as follows:
+
+\begin{equation}
+ I_{LDA}(A) = \left\{
+  \begin{array}{l l}
+    1-\frac{|A^T WA|}{|A^T(W+B)A|} &  \text{for}~|A^T(W+B)A|\neq 0\\
+    0 &  \text{for}~|A^T(W+B)A|= 0
+  \end{array} \right.
+  \end{equation}
+
+\noindent where $p\times k$ matrix $A = [a_1, a_2 , . . . , a_k ]$ defines an orthonormal projection from $p$-dimensions onto a $k$-dimensional subspace, 
+$B=\sum_{g=1}^G n_g(\bar{\mathbf{x}}_{g.}-\bar{\mathbf{x}}_{..})(\bar{\mathbf{x}}_{g.}-\bar{\mathbf{x}}_{..})^{T}$ is the between-group sum of squares, and 
+$W=\sum_{g=1}^{G}\sum_{i=1}^{n_g}(\mathbf{x}_{gi}-\bar{\mathbf{x}}_{g.})(\mathbf{x}_{gi}-\bar{\mathbf{x}}_{.g})^T$ is the within-group sum of squares. If the LDA index value is high, there is a large difference between classes.
+
+ 
+\begin{figure}[!t]
+<<huber, cache=FALSE, echo=FALSE, fig.height=5, fig.width=8, message=FALSE>>=
+
+Huberplot2<-function (origdata2D, origclass, PPmethod = "LDA", weight = TRUE, 
+    r = 1, lambda = 0.5, opt.proj = TRUE, UserDefFtn = NULL, 
+    ...) 
+{
+    index <- NULL
+    best.proj <- NULL
+    best.index <- 0
+    origdata2D <- as.matrix(origdata2D)
+    for (i in 0:360) {
+        theta <- pi/180 * i
+        proj.data <- matrix(cos(theta) * origdata2D[, 1] + sin(theta) * 
+            origdata2D[, 2])
+        proj <- matrix(c(cos(theta), sin(theta)), ncol = 1)
+        if (PPmethod == "LDA") {
+            newindex <- LDAindex(origclass, origdata2D, proj = proj, 
+                weight = weight)
+        }
+        else if (PPmethod == "PDA") {
+            newindex <- PDAindex(origclass, origdata2D, proj, 
+                weight = weight, lambda = lambda)
+        }
+        else if (PPmethod == "Lr") {
+            newindex <- Lrindex(origclass, origdata2D, proj, 
+                weight = weight, r = r)
+        }
+        else if (PPmethod == "GINI") {
+            newindex <- GINIindex1D(origclass, origdata2D, proj)
+        }
+        else if (PPmethod == "ENTROPY") {
+            newindex <- ENTROPYindex1D(origclass, origdata2D, 
+                proj)
+        }
+        else if (PPmethod == "UserDef") {
+            newindex <- UserDefFtn(proj.data, ...)
+        }
+        index <- c(index, newindex)
+    }
+    sel.index <- which(index[1:360] > signif(max(index), 6) - 
+        1e-06)
+    theta.best.all <- pi/180 * (sel.index - 1)
+    theta.best <- theta.best.all[1]
+    proj.data.best <- matrix(cos(theta.best) * origdata2D[, 1] + 
+        sin(theta.best) * origdata2D[, 2])
+    index.best <- max(index)
+    range <- round(max(index) - min(index), 5)
+    if (range == 0) {
+        PPindex <- rep(4, length(index))
+    }
+    else {
+        PPindex <- (index - min(index))/range * 2 + 3
+    }
+    data.circle <- NULL
+    data.index <- NULL
+    for (i in 1:361) {
+        theta <- pi/180 * (i - 1)
+        data.index <- rbind(data.index, c(PPindex[i] * cos(theta), 
+            PPindex[i] * sin(theta)))
+        data.circle <- rbind(data.circle, c(4 * cos(theta), 4 * 
+            sin(theta)))
+    }
+    maxdiff <- max(c(diff(range(origdata2D[, 1])), diff(range(origdata2D[, 
+        2]))))
+    orig.scaled <- apply(origdata2D, 2, function(x) (x - mean(x))/maxdiff * 
+        3.5)
+    data.cX <- data.circle[, 1]
+    data.cY <- data.circle[, 2]
+    data.X <- data.index[, 1]
+    data.Y <- data.index[, 2]
+    plot.data <- data.frame(data.cX, data.cY, data.X, data.Y)
+    x <- orig.scaled[, 1]
+    y <- orig.scaled[, 2]
+    group <- origclass
+    point.data <- data.frame(x, y, group)
+    min.X <- min(unlist(plot.data))
+    max.X <- max(unlist(plot.data))
+    P1 <- ggplot(data = plot.data, aes(x = data.X, y = data.Y)) + 
+            geom_path() + 
+            geom_path(aes(x = data.cX, y = data.cY), 
+               linetype = "dashed") + 
+            geom_point(data = point.data, 
+               aes(x = x, y = y, color = group, shape = group)) + 
+            scale_x_continuous(breaks = NULL) + 
+            scale_y_continuous(breaks = NULL) + 
+            xlab("") + ylab("") + 
+            coord_fixed() + 
+            theme_bw() + 
+            scale_shape_manual(values = c(15, 16, 17),labels = c("g1","g2","g3")) +
+            scale_colour_manual(values = c("#1B9E77", "#D95F02", "#7570B3"), 
+                                labels = c("g1","g2","g3")) + 
+            labs(colour="Class", shape="Class") +
+            theme(panel.border = element_blank())
+    if (opt.proj) {
+        P1 <- P1 + 
+          geom_abline(intercept = 0, 
+                      slope = sin(theta.best)/cos(theta.best), 
+                      linetype="dotted")
+        if (length(theta.best.all) > 1) 
+            for (i in 2:length(theta.best.all)) 
+              P1 <- P1 + geom_abline(intercept = 0, 
+                slope = sin(theta.best.all[i])/cos(theta.best.all[i]), 
+                linetype = "dotted")
+    }
+    best.proj.data <- proj.data.best
+    group <- origclass
+    hist.data <- data.frame(best.proj.data, group)
+    P2 <- ggplot(data = hist.data, aes(x = best.proj.data, group = group)) + 
+            geom_histogram(aes(fill = group), position = "stack") +
+            scale_fill_manual(values = c("#1B9E77", "#D95F02", "#7570B3"), 
+                              label="g1","g2","g3") +
+            labs(fill="Class", x="Best 1D projected data", y="Count")
+ list(P1, P2)
+ 
+}
+
+hu1 <- Huberplot2(dat.plnew[,2:3], dat.plnew[,1], PPmethod = "LDA")
+
+
+hu2 <- Huberplot2(dat.pl2[,2:3], dat.pl2[,1], PPmethod = "LDA")
+
+grid.arrange(hu1[[1]], hu1[[2]], hu2[[1]], hu2[[2]], ncol = 2)
+@
+\caption{Behavior of the LDA index on 1D projections shown using a Huber plot for simulated data, two different sets of 2D. The solid line indicates index value for each 1D projection of the 2D data. The dashed circle indicates the median index value across all projections, and the dotted line corresponds to the projection producing the maximum index value. The histogram shows the projected data corresponding the maximum index value. \label{huberpl}}
+\end{figure}
+
+Figure \ref{huberpl} examines the behavior of the LDA index on two 2D simulated data sets, using Huber's plot~\citep{huber1990data} available in the \texttt{PPtreeViz} package~\citep{PPtreeViz}. This plot shows the projection pursuit index values in all possible directions in a 2D space. These indices are calculated using the projections for ($cos \theta$, $sin \theta$), $\theta$ = $1^{\circ}$, . . . , $180^{\circ}$. For each projection, the index value is computed on the projected data, and displayed as the solid line. The circle (dashed line) is a guideline, and corresponds to the median of all index values, with the solid line. The projection corresponding to the maximum index value is indicated as a dotted line, and the projected data is shown in the histogram. 
+ 
+The PDA index is useful when $n\leq p$ and when the variables are highly correlated. In these situations the maximum likelihood variance-covariance matrix estimator will be close to singular, affecting the inverse calculation. The PDA index adjusts the variance-covariance matrix calculation, as follows:
+
+\begin{equation}
+I_{PDA}(A,\lambda)=1-\frac{|A^T W_{PDA}A|}{|A^T (W_{PDA}+B) A|}
+\end{equation}
+
+\noindent where notation as for the LDA index, with the addition of $\lambda \in [0,1)$ is a shrinkage parameter, and a different within group sum of squares, $W_{PDA}(\lambda)=\mbox{diag}(W)+(1-\lambda)\mbox{offdiag}(W)$.
+
+
+\begin{figure}[!t]
+<<boundss, cache=FALSE, echo=FALSE, fig.height=5, fig.width=8, message=FALSE>>=
+grilla <- expand.grid(X1 = seq(-4,4.8,,100),
+                            X2 = seq(-4.3,3.3,,100))
+
+pptree <- PPtreeViz::PPTreeclass(Sim~., data = dat.pl2, "LDA")
+ppred.sim <- PPtreeViz::PPclassify(pptree, test.data = grilla,
+                                   Rule = 6)
+grilla$ppred<-ppred.sim[[2]]
+
+rpart.crab <- rpart(Sim ~ X1 + X2, data = dat.pl2)
+rpart.pred <- predict(rpart.crab, newdata = grilla, type="class")
+
+bnds <- data.frame(
+  a = c(pptree$splitCutoff.node[[1]] / pptree$projbest.node[[3]],
+      pptree$splitCutoff.node[[2]] / pptree$projbest.node[[4]]),
+  b = c(-pptree$projbest.node[[1]] / pptree$projbest.node[[3]],
+      -pptree$projbest.node[[2]] / pptree$projbest.node[[4]]))
+p <- ggplot(data = grilla ) +
+       geom_point(aes(x = X1, y = X2,
+                  color = as.factor(ppred),
+                  shape=as.factor(ppred)),
+                  alpha = .20) +
+      scale_colour_brewer(name="Class", type="qual",
+                      palette = "Dark2") +
+
+      scale_shape_discrete(name = 'Class') +
+      theme_bw() +
+      theme(aspect.ratio = 1, legend.position="none")
+
+pl.pp <- p + geom_point(data = dat.pl2,
+                        aes(x = X1, y = X2,
+                            group = Sim,
+                            shape = Sim, color=Sim), size = 3) +
+  scale_y_continuous(expand = c(0,0)) +
+  scale_x_continuous(expand = c(0,0))
+
+p2 <- ggplot(data = grilla) +
+  geom_point(aes(x = X1, y = X2,
+    color = as.factor(rpart.pred),
+    shape =  as.factor(rpart.pred)), alpha = .2) +
+  scale_colour_brewer(name = "Class",
+                               labels = levels(dat.pl2$Sim),
+                               type = "qual",palette = "Dark2") +
+  theme_bw() + scale_shape_discrete(name = 'Class') +
+  scale_y_continuous(expand = c(0,0)) +
+  scale_x_continuous(expand = c(0,0)) +
+  theme(aspect.ratio = 1, legend.position ="none")
+
+pl.rpart <- p2 + geom_point(data = dat.pl2,
+                            aes(x = X1 , y = X2,
+                                group = Sim, shape = Sim,
+                                color = Sim), size = 3)
+
+grid.arrange(pl.rpart, pl.pp, ncol = 2)
+
+
+@
+ \vspace*{-0.3cm}
+ \caption{Comparison of decision boundaries for the  \texttt{rpart} (left) and PPtree (right) algorithms on 2D simulated data. The partitions generated by PPtree algorithm are oblique to the axis, incorporating the association between the two variables.\label{bounds}}
+\end{figure}
+
+
+The PPtree algorithm uses a multi-step approach to fit a multi-class model by finding linear combinations to split on. Figure \ref{bounds} compares the boundaries that would result from a classification tree fitted using the rpart algorithm~\citep{therneau2010rpart} and the PPtree algorithm.
+
+Figure \ref{diagpp1} illustrates the PPtree algorithm for three classes, and the algorithm steps are detailed below. Let  $d_n =\{(\mathbf{x_i},y_i)\}_{i=1}^n$ be the data set where $\mathbf{x_i}$ is a  p-dimensional vector of explanatory variables and  $y_i\in \mathscr{G}$ ($\mathscr{G} =\{1,2,\ldots G\}$) represents class information with $i=1,\ldots n$.
+
+\begin{enumerate}
+\item Optimize a projection pursuit index to find an optimal one-dimensional projection, $\alpha^*$, for separating all classes in the current data yielding projected data $z = \alpha^*x$.
+\item On the projected data, $z$, redefine the problem into a two class problem using the distances among the means of classes, and assign a new label, either $g_1^*$ or $g_2^*$ to each observation, generating a new class variable $y_i^*$. Note that this requires joining two or more groups into one, so that the new groups $g_1^*$ and $g_2^*$ possibly contain more than one of the original classes. 
+
+\item Find an optimal one-dimensional projection $\alpha^{**}$, using $\{(\mathbf{x_i},y_i^*)\}_{i=1}^n$ to separate the two class problem $g_1^*$ and $g_2^*$. The best separation of $g_1^*$ and $g_2^*$ is determined in this step providing the decision rule for the node,
+
+\begin{quote}
+if $\alpha^{**T}M_1< c$ then assign $g_1^*$ to the left node else assign $g_2^*$ to the right node,
+\end{quote}
+\noindent where $M_1$ is the mean of $g_1^*$.
+\item For each group, all the previous steps are repeated until $g_1^*$ and $g_2^*$ have only one class from the original classes. The depth of PPtree is at most the number of classes.
+\end{enumerate}
+
+\begin{figure}[!hbt]
+\centering
+\includegraphics[width=1\linewidth]{diag2.pdf}
+
+\caption{Illustration of the PPtree algorithm for $g=3$ classes. It is a dual pass algorithm for multiclass problems, for each split. It first finds the best separation and combines classes into two super-groups. It then searches again for the best separation between these two super-groups and splits on this. It proceeds sequentially on the subsets in the nodes, but only $g-1$ splits are allowed. \label{diagpp1}}
+\end{figure}
+
+\newpage
+
+\section{Projection pursuit random forest}\label{PPFsec}
+
+
+This section provides the definition of PPF for classification, an explanation of the algorithm, implementation details, and a description of how the diagnostics are defined and computed. 
+
+\subsection{Definition}
+
+This definition follows closely the original random forest notation in \cite{breiman2001random}, a more recent overview paper by \cite{Biau:2008}, and is important to provide here for consistency in the PPF explanation. Let the random vector of predictor variables $\mathbf{X}\in \Re^p$  and  the output random variable $Y \in \mathscr{G}$, where $\mathscr{G}$ is a finite set such that $\mathscr{G}=\{1,2, \ldots, G\}$. The training sample is defined as $D_n=\{(\mathbf{X_1}, Y_1), \ldots (\mathbf{X}_n, Y_n)\}$ of i.i.d $\Re^p \times \mathscr{G}$ random variables $(p\geq 2)$.
+The objective is to build a classifier which predicts $y$ from $\mathbf{x}$ using $D_n$ given an ensemble of classifiers $h$.
+
+ A projection pursuit classification random forest can be defined as a collection of randomized classification trees $\{h_n(\mathbf{x}, \Theta_m, D_n), m\geq 1\}$  where $\{\Theta_m\}$ are i.i.d.~random vectors. $\Theta_m$ includes the two sources of randomness in the tree (random variable selection and random bootstrap sample), then $\Theta_m$ has information about which variables were selected in each partition and which cases were selected in the bootstrap sample.
+
+For each tree, $h_n$, a unique vote is collected based on the most popular class for the selected predictor variables.  Equation \ref{rfesti} defines the PPF estimator based on combining the trees.
+
+\begin{eqnarray}\label{rfesti}
+f_n(\mathbf{X}, D_n )&=& \operatorname*{arg\,max}_{g\in \mathscr{G}} \{E_{\Theta}(I[h_n(\mathbf{X}, \Theta, D_n)=g])\}\\ \nonumber
+&=& \operatorname*{arg\,max}_{g\in \mathscr{G}} P_{\Theta}(h_n(\mathbf{X}, \Theta, D_n)=g)
+\end{eqnarray}
+
+\noindent $E_{\Theta}$ is the expectation wrt $\Theta$, conditionally on $\mathbf{X}$ and $D_n$.
+In practice, the PPF estimator is evaluated by generating $B$ random trees and take the average of the individual outcomes. This procedure is justified in a similar way to the original random forest defined by \cite{breiman2001random}, and is based on the Law of the Large Numbers~\citep{athreya2006measure}.
+
+Equation \ref{predfor} describes the prediction of a new observation $\mathbf{x_0}$.
+
+\begin{equation}
+\hat f_n(\mathbf{x_0})= \operatorname*{arg\,max}_{g\in \mathscr{G}} \sum_{k=1}^B I [ h_n (\mathbf{x_0}, \Theta_{bk} )= g]
+\label{predfor}
+\end{equation}
+
+\subsection{Algorithm }
+
+\begin{enumerate}
+
+\item Let $n=\sum_{i=1}^G n_i$ the total number of cases in the training set $d_n=\{\mathbf{x_i}, y_i\}_{i=1}^n$. $B$ stratified bootstrap samples from $d_n$ are taken. Then for each class, independently and uniformly re-sample cases from $d_{ng}$ (training data set for group $g$) with size $n_g$ to create a stratified bootstrap data set  $\{bk= b_{k1}, b_{k2}, \ldots b_{kg}\}$.
+
+\item Use a bootstrap sample $bk$ to grow a PPtree $(h_n(\mathbf{x}, \Theta_{bk}))$ to the largest extent possible without pruning. (Note that the depth of the PPtree is at most $G-1$, where $G$ is the number of classes).
+
+\begin{enumerate}
+\item Start with all the cases in $b_k$ in the root node.
+\item A simple random sample of $m$ predictor variables from the set of all the predictor variables $M$ is drawn, where $m<<M$.
+\item Find the optimal one-dimensional projection $\alpha^*$ to separate all the classes in $b_k$.
+\item If more than two class, then reduce the number of classes to two by comparing means, and assign new labels, $g_1^*$ and $g_2^*$ to each case (called the new response $y_i^*$ in $b_k$).
+
+\item Find the optimal one-dimensional projection, $\alpha^{**}$, using the bootstrap data set with the relabeled response, $y^*$, to separate $g_1^*$ and $g_2^*$.
+The linear combination is computed by optimizing a projection pursuit index to get a projection of the variables that best separates the classes using the $m$ random selected variables. Two index options are available LDA or PDA.
+\item Compute the decision boundary $c$.
+Eight different rules to define the cutoff value of each node can be used. All the rules are defined in \cite{PPtreeViz}.
+\item Keep $\alpha^{**}$ and $c$.
+\item Separate the data into two groups using the new labels $g_1^*$ and $g_2^*$.
+\item Repeat from (b) to (h) if $g_1^*$ or $g_2^*$ have more than two original classes.
+\end{enumerate}
+\item Repeat 2 for $k = 1,\ldots B$.
+\item The output is the ensemble of PPtrees, $\{h_n^{bk}\}_{k=1}^B$.
+\end{enumerate}
+
+Split values on the projected data can be computed by one of eight methods, which use the group means, or medians, sample size and variance or IQR weighting
+
+Figure \ref{diagppf} has a diagram illustrating the PPforest algorithm.
+
+\begin{figure}[!ht]
+\centering
+\includegraphics[width=1\linewidth]{diagram.pdf}
+ \vspace*{-0.5cm}
+\caption{Illustration of the PPforest algorithm. It is effectively the same as a random forest algorithm except that the PPtree classifier is used on each bootstrap sample. \label{diagppf}}
+\end{figure}
+
+\subsection{Implementation}
+\label{impl}
+
+The R package \verb# PPforest#~\citep{PPforestpkg}, provides an implementation of PPF. (The development version is available at \url{https://github.com/natydasilva/PPforest}.) 
+The initial code for PPforest was developed entirely in R. It was subsequently profiled using \verb# profvis#~\citep{profvis}, and two code optimization strategies were employed: translate main functions into \verb# Rcpp#~\citep{eddelbuettel2011rcpp} and parallelization  using \verb# plyr#. The \verb# microbenchmark# package was used to compare the speed before and after optimization, and also for the comparison in Figure \ref{ratiotim} which shows the performance for a range of sample size ($n$), dimension ($p$), groups ($g$), number of trees ($m$) and proportion of variables considered at each node. The proportion has the largest effect on speed.
+
+\begin{figure}[!ht]
+<<resus, echo = FALSE, message = FALSE, out.height =  "15cm", out.width = "15cm", cache = FALSE, warning = FALSE>>=
+# To replicate this Rdata the code is available in additionalcode.R file
+load("preformance_timesWTplyrnew.Rdata")
+
+global_labeller <- labeller(
+  g = class,
+  ntrees = trees,
+  .default = label_both
+)
+
+mm.allbig <- mm.new %>%
+  mutate(seconds = time/1e9, prop.vs =as.factor(prop.vs))
+
+mm.allbig <- mm.allbig %>%
+  rename(n = ns, p = ps, g = gs, m=mtrees)
+ggplot(data = mm.allbig) +
+    geom_smooth(aes(g, seconds, color = prop.vs,
+                        linetype = prop.vs), method = "lm") +
+    geom_jitter(aes(g, seconds, color = prop.vs, shape = prop.vs),
+               alpha = .4, size = 3, height = 0) +
+    scale_x_continuous(breaks=seq(0,10,2)) +
+    labs(x = "Num. groups", y = "Time (sec)") +
+   scale_colour_viridis_d(name = "Proportion of variables", 
+                           begin = 0.1, end = 0.6, 
+                          option = "magma") +
+    scale_shape(name = "Proportion of variables") +
+    scale_linetype(name = "Proportion of variables") +
+    facet_grid(m~n + p, labeller = label_both,
+                scales = "free_y") +
+    theme(legend.position = "bottom",
+        axis.text = element_text(size = 6), aspect.ratio = 1 )
+@
+\vspace{-3cm}
+\caption{Computational performance for different sample size ($n$), number of variables ($p$), number of groups ($g$), number of trees ($m$) and proportion of variables considered for each node. Computational speed suffers most when the proportion of variables is high.\label{ratiotim}}
+\end{figure}
+
+\subsection{PPF diagnostics}
+
+The process of bagging and combining results from multiple trees produces numerous diagnostics which can provide a lot of insight into the class structure in high dimensions. Because ensemble methods are composed of many models fitted to subsets of the data, many statistics can be calculated to be analyzed as a separate data set. This provides the ability to understand how the model is working. The diagnostics of interest are the error rate, variable importance measure, vote matrix, and proximity matrix. 
+These diagnostics are used to assess model complexity, individual model contributions, variable importance and dimension reduction, and uncertainty in prediction associated with individual observations. Most of the diagnostics work as in RF, with the exception being the variable importance measure, which is specific to PPforest.
+
+
+\subsubsection{Model error}
+
+Using the out-of-bag (oob) cases from bagged trees in the forest construction allows ongoing estimates of the generalization error for an ensemble of trees, described in \cite{breiman2001random}.
+Given a training data set $d_n$, $B$ bootstrap samples from $d_n$ are taken. For each bootstrap sample ($b= 1, 2, \ldots B$), a \verb# PPtree# classifier $h_n(\mathbf{x}, \Theta_b)$ is constructed, and a majority vote is used to get the PPF predictor.
+The oob cases are used to get the error rate estimates. For each $\{\mathbf{x_i}, y_i\}$ in $d_n$, the votes are aggregated only for the classifiers $h_n(\mathbf{x}, \Theta_b)$ that do not contain $\{\mathbf{x_i}, y_i\}$. Hence, PPF is called the out-of-bag classifier, and the error rate for this classifier (out-of-bag error rate) is the estimate of the generalized error. The out-of-bag error rate is a measure for each model that is combined in the ensemble and is used to provide the overall error of the ensemble.
+
+\subsubsection{Variable importance}
+
+PPF calculates variable importance in two ways: (1) permuted importance using accuracy,  and (2) importance based on projection coefficients on standardized variables.
+The permuted variable importance is comparable to the measure defined in the classical random forest algorithm. It is computed using the oob cases for the tree $k\;\;(B^{(k)})$ for each $X_j$ predictor variable.  Then the
+permuted importance of the variable $X_j$ in the tree $k$ can be defined as:
+
+\[
+IMP^{(k)}(X_j) = \frac{\sum_{i \in B^{(k)} } I(y_i=\hat y_i^{(k)})-I(y_i=\hat y_{i,P_j}^{(k)})}{|B^{(k)}|}
+\]
+
+\noindent where $\hat y_i^{(k)}$%=h(x_i,\Theta_k)$
+ is the predicted class for the observation $i$ in the tree $k$, and $y_{i,P_j}^{(k)}$ is the predicted class for the observation $i$ in the tree $k$ after permuting the values for variable $X_j$. The global permuted importance measure is the average importance over all the trees in the forest.
+ 
+This measure is based on comparing the accuracy of classifying oob observations using the true class with permuted (nonsense) class.
+
+For the second importance measure, the coefficients of each projection are examined. The magnitude of these values indicates importance if the variables have been standardized. The variable importance for a single tree is computed by a weighted sum of the absolute values of the coefficients across node, then the weights take the number of classes in each node into account($cl_{nd}$)~\citep{lee2013pptree} .
+The importance of the variable $X_j$ in the PPtree $k$ can be defined as:
+
+\[
+IMP_{pptree}^{(k)}(X_j)=\sum_{nd = 1}^{nn}\frac{|\alpha_{nd}^{(k)}|}{cl_{nd} }
+\]
+
+\noindent where $\alpha_{nd}^{(k)}$ is the projected coefficient for node $ns$ and variable $k$ and $nn$ the total number of node partitions in the tree $k$.
+
+The global variable importance in a PPforest then can be defined in different ways. The most intuitive are the average variable importance from each PPtree across all the trees in the forest.
+\[
+IMP_{ppforest1}(X_j)=\frac{\sum_{k=1}^K IMP_{pptree}^{(k)}(X_j)}{K}
+\]
+Alternatively, a global importance measure is defined for the forest as a weighted mean of the absolute value of the projection coefficients across all nodes in every tree. The weights are based on the projection pursuit indexes in each node ($Ix_{nd}$), and 1-(OOB-error of each tree)($acc_k$).
+
+\[IMP_{ppforest2}(X_j)=\frac{\sum_{k=1}^K acc_k \sum_{nd = 1}^{nn}\frac{Ix_{nd}|\alpha_{nd}^{(k)}|}{nn }}{K}
+\]
+
+\subsubsection{Observational level diagnostics}
+
+The vote matrix is an uncertainty measure for each observation, across models, is the proportion of times that a case is predicted to be in each class. If a case is always predicted to be the one class, there is no uncertainty about its group, and if this matches the true class then it is correctly labeled. Cases that are predicted to be multiple classes, indicate difficult-to-classify observations. These cases may be important in that they might indicate special attention is needed in some neighborhoods of the data space, or more simply, could be errors in measurements in the data.
+
+In a tree, each pair of observations can be in the same terminal node or not. Tallying this up across all trees in a forest gives the proximity matrix, an $n\times n$ matrix of the proportion of trees that the pair shares a terminal node. A proximity matrix can be considered to be a similarity matrix. This is typically used for follow-up cluster analysis to assess the strength of the class structure, and whether there are additional unlabeled clusters.
+
+\section{Performance comparison}\label{perfsec} 
+
+This section presents simulation results and a benchmark data study to examine the predictive performance of PPF in comparison to other methods. In the benchmark data study, PPF is compared with PPtree, CART and RF. The simulation results are designed to compare PPF with RF on data with linear projections defining class differences.
+
+The performance of PPF is compared with the classification methods, PPtree, CART and RF using 10 benchmark data sets taken from the UCI Machine Learning archive \citep{Lichman}. Table \ref{bench.tab} presents summary information about the benchmark data, number of groups, cases, and predictors for each data set. The \textit{imbalance} between groups is measured by the range of group size proportions and \textit{correlation} is the average of all pairwise correlation coefficients among predictor variables.
+
+<<bench_data, eval = TRUE,echo=FALSE, message=FALSE, results='asis'>>=
+d <- data(package = "PPforest")
+# names of the datasets: d$results[, "Item"]
+nm <- d$results[, "Item"]
+## call the promised data
+data(list = nm, package = "PPforest")
+## get the dimensions of each data set
+tbl2 <- map_df(mget(nm), function(dd) {
+  ng <- as.numeric(table(dd[,1]))/nrow(dd) # group size weights
+
+  cnd <- sapply(dd, is.factor)
+  cnd[1] <- TRUE
+  R <- cor(dd[ , !cnd])
+ tibble(Cases = nrow(dd), Predictors = as.integer(ncol(dd)-1), Groups = length(ng),
+             Imbalance = max(ng) - min(ng), Correlation =
+               mean( abs(R[lower.tri(R)])) )}) %>%
+  mutate(Data = nm) %>% arrange(desc(Correlation)) %>%
+  dplyr::select(Data, Cases:Correlation) 
+  
+ xtable(tbl2, caption = 'Overview of benchmark data: number of cases, predictors, groups, imbalance and correlation. Imbalance indicates relative class sizes (0=balanced classes), and higher correlation indicates the potential for separations occurring in combinations of variables.', label = 'bench.tab') %>%
+  print(caption.placement = 'top', include.rownames = FALSE)
+@
+
+For each benchmark data set, $2/3$ of the observations are randomly chosen and used for training while the remaining $1/3$ are used as test data for computing predictive error. This procedure is repeated 200 times and the mean error rate is reported in Table \ref{res}. In PPF, the number of variables selected in each node partition is a tuning parameter, the proportion of variables selected at each partition. Three different values were used (0.6, 0.9 and the RF default). The test error reported for PPF is the best from these.
+
+The results show that PPF has a better performance in the test data set than the other methods for the crab, fishcatch, leukemia, lymphoma, olive and wine data, while the RF test error is smaller for glass, image, NCI60 and parkinson data. When there is a big improvement over RF, PPtree also performs well, and the reason is that the difference between classes is in combinations of variables so using linear combinations provides better performance. PPF has the advantage, over PPtree, of providing additional diagnostics for a problem, so even though performance is similar, the diagnostics obtained are beneficial. Overall, PPF performs comparably to these other tree-based methods, and provides consistently low error rates.
+
+<<benchcode,echo=FALSE, message=FALSE, warning = FALSE,results='asis'>>=
+# the code to replicate this is in additionalcode.R
+
+load("table.raw.Rdata")
+
+tt1 <- table.raw %>%
+  separate(method, into = c('met','b')) %>%
+  group_by(data, met) %>% mutate(mm = min(mn.te)) %>%
+  filter(mn.te == mm) %>%
+  select(data, met, mn.te) %>% spread(met, mn.te) %>% 
+  rename(Data =  data, TEcart = cart, TEppf = ppf, TEpptr = pptr, TErf = rf) %>% 
+    select(Data,TEcart, TEpptr, TErf, TEppf) 
+
+#Run this code to  replicates the table below
+tt2 <-  table.raw %>%
+  separate(method, into = c('met','b')) %>%
+  group_by(data, met) %>% mutate(mm = min(mn.te)) %>%
+  filter(mn.te == mm) %>%
+  select(data, met, mn.tr) %>% spread(met, mn.tr) %>% 
+  rename(Data =  data)  %>%
+  inner_join(select(tbl2, Correlation, Data) ) %>%
+  arrange(desc(Correlation)) %>% 
+   select(Data,cart, pptr, rf, ppf) 
+  
+tbl3 <- tt2 %>%  inner_join(tt1) %>% 
+ rename(CART = cart,  PPtree = pptr, RF = rf, PPforest = ppf,
+        CART = TEcart, PPtree = TEpptr, RF = TErf,PPforest = TEppf) 
+  
+
+# para los encabezados de columnas
+addtorow <- list()
+addtorow$pos <- list(-1) # para que quede arriba de los column names
+addtorow$command <- c('\\hline\\hline &  \\multicolumn{4}{c||}{TRAINING} & \\multicolumn{4}{c}{TEST} \\\\')
+
+tbl3 %>% xtable(align = "ll||cccc||cccc", caption = 'Comparison of  CART, PPtree, RF and PPF results with various data sets. The mean of training and test error rates from 200 re-samples is shown. (Order of rows is same as in Table \\ref{bench.tab}.) PPF performs favorably compared to the other methods. \\label{res}',  digits = 3) %>%
+  print(add.to.row=addtorow, include.rownames = F, caption.placement = 'top' )
+
+
+
+@
+
+Figures \ref{parallel} displays the performance comparison graphically. Each line connects the errors for one data set. Even though RF outperforms PPF on almost half the data (Table \ref{res}) PPF tends to have consistently low error.
+
+\begin{figure}[!hbpt]
+<<parbench, depenson="benchpl",echo=FALSE, message=FALSE, warning=FALSE, fig.height=4>>=
+load("table.raw.Rdata")
+tbl1 <- table.raw %>%rename(Data=data) %>% 
+  inner_join(select(tbl2, Correlation, Data) ) %>%
+  arrange(desc(Correlation)) %>% 
+   select(-Correlation) %>% 
+  separate(method, into = c('met', 'b') ) %>% 
+  group_by(Data, met) %>% mutate(mm = min(mn.te) ) %>%
+  filter(mn.te == mm) %>% select(Data, met, mn.tr, mn.te) %>% ungroup() %>%
+  gather(type, error, mn.tr, mn.te) %>% mutate(met = reorder(met, error) ) %>%
+  unite(gg, Data, type, remove = FALSE) %>% 
+  mutate(type = factor(type, labels = c("Test","Training")),
+         met = fct_recode(met, "PPforest" = "ppf", "CART" = "cart",
+                          "PPtree" = "pptr", "RF" = "rf"), Data = factor(Data, levels = tbl2$Data))  
+
+setFactorOrder <- function(x, order = sort(levels(x))) {
+# Returns a factor ordered by `order`.
+# If order is missing, defaults to `levels(x)` if available, else to `sort(unique(x))`
+# Useful for ggplot and elsewhere were ordering is based on the order of the levels
+
+  if (!is.factor(x)) {
+    warning("`x` is not a factor. Will coerce.")
+    levs <- sort(unique(x))
+    if (missing(order))
+      order <- levs
+  } else {
+    levs <- levels(x)
+  }
+
+  # any values in order, not in levels(x)
+  NotInx <- setdiff(order, levs)
+
+  if (length(NotInx)) {
+    warning ("Some values not in x:\n", paste(NotInx, collapse=", "))
+  }
+
+  # levels(x) not explicitly named in order
+  Remaining <-  setdiff(levs, order)
+
+  order <- c(setdiff(order, NotInx), Remaining)
+
+  factor(x, level = order)
+}
+
+tbl1$type<- setFactorOrder(tbl1$type, c("Training", "Test"))
+  ggplot(tbl1) + geom_line(aes(x = fct_relevel(met, "CART", "PPtree", "RF", "PPforest"), y = error, group = gg, color = Data) ) +
+  scale_x_discrete( expand = c(0.01, 0.01) ) +
+  scale_colour_brewer(palette = "Spectral") +
+
+  labs(y ="Average error rate", x = "Method", colour = "Data") +
+    theme(axis.text.x = element_text(angle = 90)) +
+    
+  facet_wrap(~type, ncol = 2, labeller = label_parsed) +
+  theme(legend.position = "bottom")  
+
+
+
+@
+\caption{Benchmark data results shown graphically. PPF performs consistently well across most of the data sets. \label{parallel}}
+\end{figure}
+
+
+
+\section{Diagnostics comparison}\label{options}
+
+The diagnostics computed by PPF (Section \ref{PPFsec}) and RF are compared for the lymphoma data, which helps to understand why and how PPF outperforms RF with this data.
+
+\subsection{Variable importance}
+
+Figure \ref{globalimp} illustrates how the variable importance differs, using the lymphoma data. PPF outperformed RF for this data. There are three groups, and it is a high-dimension, low sample size data set. With PPF, the PDA index is used, and the 60\% of variables are available at each node. The number of trees used is the same as the RF default. Only the top ten most important variables are shown. There are some common on both lists and a some differences. Showing just the first two variables from each list is sufficient to illustrate the different type of boundaries induced by the classifiers. The two ways of computing importance in PPF do produce a different hierarchy of variables. With the global average importance, Gene35 and Gene50 are the top two, and these distinguish the small group FL best. With the global importance, Gene35 and Gene44 are featured, and together these find a big gap between DLBCL and the other two groups. PPF is utilizing the association between variables to classify groups, as would be expected.
+
+
+<<impolive, echo = FALSE, warning = FALSE, fig.height = 4, eval=TRUE>>=
+set.seed(100)
+
+lymphppf <- PPforest(data = lymphoma, class ="Type", std = TRUE, size.tr = 1, m = 500, size.p = 0.6, PPmethod = 'PDA', lambda=0.1)
+
+lymphrf <- randomForest(Type ~ ., data = lymphoma, importance = TRUE, proximity = TRUE, mtry = 6)
+
+@
+
+\begin{figure}[!ht]
+\begin{center}
+<<globalimpoe, echo = FALSE, message=FALSE, warning = FALSE, fig.height = 3, fig.width = 8>>=
+globalimpo <- ppf_global_imp(data = lymphoma, class = 'Type', lymphppf)
+averimpo <- ppf_avg_imp(lymphppf, "Type")
+imporf2 <- data.frame(Type = as.factor(rownames( lymphrf$importance)), lymphrf$importance) %>%
+  select(Type, MeanDecreaseAccuracy) %>%
+  arrange(desc(MeanDecreaseAccuracy)) %>% top_n(10)
+
+ppfimpo1 <- ggplot(averimpo[1:10,], aes(x = mean, y = variable)) + geom_point() + theme(aspect.ratio = 1) + labs(x = "Global aver. importance", title ="PPforest", y="")
+
+ppfimpo2 <- ggplot(globalimpo[1:10,], aes(x = mean, y = variable)) + geom_point() + theme(aspect.ratio = 1) + labs(x = "Global importance", title ="PPforest", y ="")
+
+rfimpo <- ggplot(imporf2, aes(y = fct_reorder(Type, MeanDecreaseAccuracy ), x = MeanDecreaseAccuracy)) + geom_point()  + theme(aspect.ratio = 1) + labs(y = "", x = "Permuted importance", title="Random Forest")
+
+grid.arrange(rfimpo,ppfimpo1, ppfimpo2,  ncol=3)
+@
+<<globalimpoevars, echo = FALSE, message=FALSE, warning = FALSE, fig.height = 3, fig.width = 8>>=
+p1 <- ggplot(lymphoma, aes(x = Gene35, y = Gene50, colour = Type)) +
+  geom_point() + theme(aspect = 1) + ggtitle("PPforest") +
+  scale_colour_brewer(type = "qual", palette = "Dark2")
+p2 <- ggplot(lymphoma, aes(x = Gene35, y = Gene44, colour = Type)) +
+  geom_point() + theme(aspect = 1) + ggtitle("PPforest") +
+  scale_colour_brewer(type = "qual", palette = "Dark2")
+p3 <- ggplot(lymphoma, aes(x = Gene34, y = Gene49, colour = Type)) +
+  geom_point() + theme(aspect = 1) + ggtitle("Random Forest") +
+  scale_colour_brewer(type = "qual", palette = "Dark2")
+
+grid_arrange_shared_legend(p3,p1, p2)
+@
+\caption{Comparison of importance measures for the lymphoma data, where PPF outperformed RF. Top row shows the top 10 variables by each method, with two ways of calculating with PPF. Bottom row shows the top two variables from each, which illustrates the difference between methods. PPF is detecting differences between groups when there is association between variables. Using the global average importance (middle), Gene35 and Gene50 better distinguish group FL. Using the global importance, Gene35 and Gene44 find a big gap between group DLBCL and the other two. \label{globalimp}}
+\end{center}
+\end{figure}
+
+\begin{figure}
+\centering
+<<ternary, echo = FALSE, warning = FALSE, message = FALSE, fig.height = 3>>=
+f.helmert <- function(d)
+{
+  helmert <- rep(1 / sqrt(d), d)
+  for (i in 1:(d - 1))
+  {
+    x <- rep(1 / sqrt(i * (i + 1)), i)
+    x <- c(x, -i / sqrt(i * (i + 1)))
+    x <- c(x, rep(0, d - i - 1))
+    helmert <- rbind(helmert, x)
+  }
+
+  return(helmert)
+}
+
+#ppf PPforest object
+#V1,V2,V3 select the 3 proj directions
+ppf <- lymphppf
+rf <- lymphrf
+  n.class <- ppf$train %>% select_(ppf$class.var) %>% unique() %>% nrow()
+  projct <- t(f.helmert(length(unique(ppf$train[, ppf$class.var])))[-1,])
+
+  datppf <-
+    data.frame(
+      Class = ppf$train[, ppf$class.var],
+      ids = 1:nrow(ppf$train),
+      proj.vote = as.matrix(ppf$votes) %*% projct
+    )
+
+
+  datrf <-
+    data.frame(
+      Class = ppf$train[, ppf$class.var],
+      ids = 1:nrow(ppf$train),
+      proj.vote = as.matrix(rf$votes) %*% projct
+    )
+
+#need to run f_hermite
+f_composition <- function(data) {
+  d <- dim(data)[2]
+  hm <- f.helmert(d)
+  x <- data - matrix(1 / d, dim(data)[1], d)
+  return((x %*% t(hm))[,-1])
+}
+
+simplex <- function(p = 3) {
+  vert <- f_composition(diag(p + 1))
+  colnames(vert) <- paste0("d", 1:ncol(vert))
+
+  wires <-
+    do.call(expand.grid, list(c(1:nrow(vert)), c(1:nrow(vert))))
+
+  structure(list(points = vert,
+                 edges = wires[!(wires[, 1] == wires[, 2]),]))
+}
+
+##ternary plot
+  s <- simplex(2)
+  pts <- data.frame(s$points)
+
+  edg <- data.frame(x1=pts[,"d1"][s$edges[,1]], x2=pts[,"d1"][s$edg[,2]],
+                    y1=pts[,"d2"][s$edg[,1]], y2=pts[,"d2"][s$edg[,2]])
+
+ternaryppf <- datppf %>% ggplot(aes(proj.vote.x, proj.vote.x.1, color = Class)) +
+      geom_segment(data = edg, aes(x = x1, xend = x2,
+                                 y = y1, yend = y2), color = "black" ) +
+      geom_point(size = I(3), alpha = 2/3) +
+      labs(y = "",  x = "") +
+      theme(legend.position = "bottom", aspect.ratio = 1) +
+      scale_colour_brewer(type = "qual", palette = "Dark2") +
+      labs(x = "T1", y = "T2", title = "PPforest") +
+    theme(aspect.ratio=1)  + scale_y_reverse()
+
+ternaryrf <- datrf %>% ggplot(aes(proj.vote.x, proj.vote.x.1, color = Class)) +
+      geom_segment(data = edg, aes(x = x1, xend = x2,
+                                 y = y1, yend = y2), color = "black" ) +
+      geom_point(size = I(3), alpha = 2/3) +
+      labs(y = "",  x = "") +
+      theme(legend.position = "bottom", aspect.ratio = 1) +
+      scale_colour_brewer(type = "qual", palette = "Dark2") +
+      labs(x = "T1", y = "T2", title ="Random Forest") +
+    theme(aspect.ratio=1)  + scale_y_reverse()
+
+@
+<<side, echo = FALSE, warning = FALSE, message = FALSE, fig.height=6, eval=TRUE>>=
+#side-by siede boxplot
+  voteinfppf <- data.frame(ids = 1:length(lymphppf$train[, 1]), Type = lymphppf$train[, 1],
+                      lymphppf$votes, pred = lymphppf$prediction.oob ) %>%
+  gather(Class, Probability, -pred, -ids, -Type)
+
+  voteinfrf <- data.frame(ids = 1:length(lymphrf$predicted), Type = lymphrf$y,
+                      lymphrf$votes, pred = lymphrf$predicted ) %>%
+  gather(Class, Probability, -pred, -ids, -Type)
+
+side <-  function(ppf, voteinf, ang = 0, lege = "bottom", siz = 6,
+                  ttl = "Side by side dotplot") {
+
+  ggplot(data = voteinf, aes(x = fct_reorder(Class, Probability,,.desc = TRUE), y = Probability, color = Type)) +
+    geom_jitter(height = 0, width=0.2, size = I(siz), alpha=2/3) +
+    ggtitle(ttl) +
+    scale_colour_brewer(type = "qual", palette = "Dark2" ) +
+    theme(legend.position = lege, legend.text = element_text(angle = ang), axis.text.x = element_text(angle = 45), aspect.ratio = 1) +
+    labs(colour = "Class", y = "Proportion", x = "")
+}
+
+sidepp <- side(oliveppf, voteinfppf, ttl = "PPforest", siz = 2, lege = "none")
+siderf <- side(oliverf, voteinfrf, ttl = "Random Forest", siz = 2)
+
+grid_arrange_shared_legend( ternaryrf,ternaryppf,  siderf,sidepp, ncol = 2, nrow = 2)
+@
+\caption{Comparison of the out-of-bag vote  matrix for the three groups of the lymphoma data, returned by RF and PPF: (top) ternary plot, (bottom) side-by-side jittered dotplots. This illustrates the difference between methods. PPF votes more decisively for most cases, than RF. Especially this is true for the DLCBL class, where all but one are almost always predicted to the true class.}
+\label{voteplots}
+\end{figure}
+
+\subsection{Vote matrix}
+
+Figure \ref{voteplots} shows the vote matrices returned by PPF and RF for three classes of the lymphoma data. It is represented in two ways: as a ternary plot and as a side-by-side jittered  dotplot. The vote matrix has three columns corresponding to the proportion of times the case was predicted to be class B-CLL, DLBCL or FL, and thus is constrained to lie in a 2D triangle in 3D space. A ternary diagram is created using a helmert transformation of the vote matrix to capture the 2D subspace. The way to read it is: points near the vertex are clearly predicted to be one class, points along an edge are confused between two classes, and points in the middle are confused between the three classes. PPF provides more distinct classification of observations than RF, because the points are more concentrated in the vertices, and along one edge.
+
+The side-by-side jittered dotplot is an alternative representation that readily can be used for any number of classes. The proportion each case is classified to a group is displayed vertically along a horizontal axis representing the categorical class variable. Points are jittered a little horizontally to better see the distribution of proportions, and colour represents the true class. Points concentrated at the top part indicate cases that are clearly grouped into a class, and if the colour matches the true class then these are correct classifications. The message is similar to the ternary diagram: DLBCL is much more clearly distinguished by PPF, and FL is actually distinguishable from B-CLL by PPF but confused by RF.
+
+
+\subsection{Proximity}
+
+\begin{figure}[!ht]
+\centering
+<<mds, echo=FALSE, warning=FALSE, message=FALSE, fig.height=3,  eval=TRUE>>=
+  #Multidimensional scaling plot using proximity matrix information from PPforest
+
+k = 2
+lege = "none"
+siz = 3
+d <- diag(nrow(lymphppf$train))
+dppf <- as.dist(d + 1 - lymphppf$proximity)
+pprf.mds <- stats::cmdscale(dppf, eig = TRUE,  k = k)
+colnames(pprf.mds$points) <- paste("MDS", 1:k, sep = "")
+dfppf <- data.frame(Class = lymphppf$train[, 1], pprf.mds$points)
+p12ppf <-  ggplot2::ggplot(data = dfppf) +
+  geom_point(ggplot2::aes(x = MDS1, y = MDS2, color = Class),
+             size = I(siz), alpha = .5) +
+  scale_colour_brewer(type = "qual", palette = "Dark2", name = "Class") +
+  theme(legend.position = lege, aspect.ratio = 1) + labs(title = "PPforest")
+
+drf <- as.dist(d + 1 - lymphrf$proximity)
+rf.mds <- stats::cmdscale(drf, eig = TRUE,  k = k)
+colnames(rf.mds$points) <- paste("MDS", 1:k, sep = "")
+dfrf <- data.frame(Class = lymphppf$train[, 1], rf.mds$points)
+
+p12rf <-  ggplot2::ggplot(data = dfrf) +
+  geom_point(ggplot2::aes(x = MDS1, y = MDS2, color = Class),
+             size = I(siz), alpha = .5) +
+  scale_colour_brewer(type = "qual", palette = "Dark2", name = "Class") +
+  theme(legend.position = lege, aspect.ratio = 1) + labs(title ="Random Forest")
+
+grid_arrange_shared_legend(p12rf,p12ppf, nrow=1)
+
+@
+\caption{Examining similarity between cases, using pairwise plots of multidimensional scaling on the proximity matrix from RF and PPF fits of the lymphoma data. It can be seen that most cases are grouped closely with their class in PPF while in RF FL and B-CLL are mixed. \label{prox1}}
+\end{figure}
+
+Figure \ref{prox1} shows multidimensional scaling plots of the proximity matrix produced by PPF and RF classification of the lymphoma data. PPF provides the cleaner proximities. This means that more frequently observations from the same class reside in the same terminal node of the trees making up the PPF, than those of RF.
+
+%\newpage
+
+\subsection{Parameter selection}
+
+The primary parameters for PPF are mostly the same as those for RF: number of trees, and number of variables used in each node partition, with the addition of $\lambda$ when PDA is used as the index.
+
+Figure \ref{parameters} (left) shows the effect of proportion of variables for the benchmark data comparison. The average error over 200 training/test splits is shown. For several data sets error is lower when the more variables are used. Several converge to low error rate when half the variables are included. In some cases, leukemia and NCI60, the error increases when more variables are included. These two examples are where the cases variables ratio is smaller among the benchmark data set. This suggest that in small n big p problem increase the number of variables will be not the best strategy. In Section \ref{rnaapli} we will show an example to illustrate this point.
+
+The right plot compares the number of trees needed to optimize the OOB error for both PPF and RF on the lymphoma data. Both need around 100 trees to produce best performance.
+
+
+\begin{figure}[!ht]
+\centering
+<<plvars, echo = FALSE, warning = FALSE, message = FALSE, fig.height=4, fig.width=4>>=
+# code to replicate examvar.Rdata is in additionacode.R
+
+load("examvar.Rdata")
+examvar %>% ggplot(aes(x =  sam.p, y = mn.te, color = Data)) + geom_line() + geom_point() + theme(legend.position = "bottom") + labs(y= "Mean error", x = "Proportion of variables") +
+  scale_color_brewer("", palette = "Paired") -> p1
+
+@
+\end{figure}
+%\newpage
+
+\begin{figure}[!ht]
+\centering
+<<errorrate, echo=FALSE, warning=FALSE, message=FALSE, fig.height=4, fig.width=8>>=
+
+errrate <-  read.csv("errorrates_lymphoma.csv")
+errrate <- errrate %>% rename(PPF=PPFerror, RF=RFerror)
+errrate %>% gather(Model,ooberror, -Trees, -X) %>% mutate(Model = factor(Model)) %>%
+  ggplot(aes(x = Trees, y = ooberror, color = Model)) +
+  geom_point(alpha = 0.6) + geom_smooth(se = FALSE) +
+  scale_color_brewer("", palette = "Dark2") +
+  ylim(c(0,0.15))+
+  theme(legend.position = "bottom") +
+  labs(y = "OOB error rate") -> p2
+grid.arrange(p1, p2, ncol = 2)
+@
+\caption{Illustrating model tuning using error rate reduction. The average error rate plotted against proportion of variables in all the benchmark data is shown at left. The error rate tends to be better with more variables, but it does vary substantially by data set. OOB error is plotted against number of trees (right) on the lymphoma data for both PPF and RF. PPF has the consistently lower error, but both would indicate about 100 trees is sufficient to get the best results. \label{parameters} }
+\end{figure}
+
+
+\section{Application: RNA-seq gene expression}\label{rnaapli}
+
+We applied the proposed method to analyze an RNA-seq gene expression data set. The data are high-dimensional, with the number of observations, $n$ is very small relative to the number of features, $p$. Traditional classification methods like linear discriminant analysis or logistic regression cannot be applied directly in this context. PPforest can be applied for small $n$ big $p$ problem using PDA index. 
+
+There are four genotypes of maize, two inbred genotypes (B73 and Mo17) and its reciprocal hybrids (B73xMo17 and Mo17xB7), with just four replicates of each. The details of the experiment are described in \cite{paschold2012}. A subset of 1078 genes are flagged as important for understanding the so-called gene heterosis, in at least one of the two hybrids. In plant breeding, heterosis appears when the hybrid is deferentially expressed with respect to its parents. 
+
+We set up the classification problem as in \cite{datta2014statistical}, where the response variable is the genotype (four classes, B73, Mo17, B73xMo17 and Mo17xB7) and the feature variables are the expression of the 1078 genes. The goal is to identify important genes to distinguish among genotypes. The subset is formed with genes that are already found to be relevant, for distinguishing between inbred genotypes and its reciprocal hybrids, because choosing genes with smallest $p$-values can be misleading \citep{cook2007exploring}. To compare the predictive performance among different methods we will use leave-one out cross validation since we have a limited amount of data (16 observations).
+ 
+<<tabrna, echo=FALSE, results='asis'>>=
+tab_RNA<-readRDS('resRNA_new.rds')
+  colnames(tab_RNA) <- c("Method", "Training", "Test")
+tbrna<- tab_RNA %>% mutate(Method = fct_recode(Method, "CART" = "cart",  "PPF.4"="ppf.pda.4", "PPF.03"="ppf.pda.03", "PPtree" = "pptr.pda", "RF"="rf"), Training = Training, Test =  Test)%>%xtable(align = "ll||c||c",caption = 'Comparison of CART, PPF, PPtree, and RF results with maize RNA-seq gene exression data set. The mean of training and test error rates from leave-one-out cross validation is shown. PPF.03 performs favorably compared to the other methods. \\label{res_RNA}',  digits =3)
+
+tbrna %>% print( include.rownames=F, caption.placement = 'top' )
+
+@
+\begin{figure}[!ht]
+\centering
+<<rnaseq, echo=FALSE, fig.height=5, fig.width=8, warning=FALSE>>=
+rnaseq <-readRDS('rnaseq_data.rds')
+
+dat_rna <- rnaseq %>% 
+  dplyr::select(GeneID, genotype, total,replicate) %>%
+  spread(GeneID,total) %>% 
+  dplyr::select(-replicate) %>% 
+  mutate(genotype = as.factor(genotype)) %>% 
+  dplyr::rename( Type=genotype  ) %>% data.frame()
+
+dd <- dat_rna
+dd_sc <- data.frame(dd$Type, scale(dd[,-1]) )
+  colnames(dd_sc)[1] <- 'Type'
+  set.seed(123)
+
+load("ppf.m.Rdata")
+load("globalimpo_rna.Rdata")
+load("averimpo_rna.Rdata")
+imp_genes10 <- globalimpo_rna %>% slice(1:10) %>% pull(variable) %>% as.character()
+# rnaseq %>% filter(GeneID %in%aux) %>% head()
+
+#scaled data
+pl_rna1 <- dd_sc  %>%
+  dplyr::select(imp_genes10,Type ) %>%
+  mutate(id = 1:16 )%>%
+  gather(key,value,-id,-Type) %>%
+  left_join(globalimpo_rna, by=c('key'='variable' ) ) %>% 
+  ggplot( aes(x = fct_reorder(key,-mean), y = value,
+                                      group = id, key = id, colour = Type, var = key))  +
+      geom_line() + labs(x = "Most important genes", y="Standardize gene expression") + scale_colour_brewer(type = "qual", palette = "Dark2") + theme( axis.text.x  = element_blank() )+scale_x_discrete( expand = c(0.01, 0.01)) 
+
+
+sca_rna1 <- dd_sc  %>%
+  dplyr::select(imp_genes10,Type ) %>%
+  ggplot(aes(x = GRMZM2G046776, y = GRMZM2G125969, color = Type)) + geom_point(size = I(3), alpha = 1/2) + scale_colour_brewer(type = "qual", palette = "Dark2") + theme(legend.position = "none")
+
+sca_rna2 <- dd_sc  %>%
+  dplyr::select(imp_genes10,Type ) %>%
+  ggplot(aes(x = GRMZM2G093708, y = GRMZM2G014695, color = Type)) + geom_point(size = I(3), alpha = 1/2) + scale_colour_brewer(type = "qual", palette = "Dark2") + theme(legend.position = "none")
+
+sca_rna3 <- dd_sc  %>%
+  dplyr::select(imp_genes10,Type ) %>%
+  ggplot(aes(x = GRMZM2G125969, y = GRMZM2G075892, color=Type))+geom_point(size = I(3), alpha = 1/2) +scale_colour_brewer(type = "qual", palette = "Dark2")+ theme(legend.position="none")
+
+ppfimpo1_rna <- ggplot( globalimpo_rna[1:50,], aes(x = mean, y = variable)) + geom_point() + theme(aspect.ratio = 1, axis.text.y = element_blank()) + labs(x = "Global average importance", y="")
+
+(pl_rna1|ppfimpo1_rna)/(sca_rna1|sca_rna2|sca_rna3 )
+
+
+@    
+\caption{Overview of the PPF results for the maize RNA-seq data. The parallel coordinate plot (top left) shows the expression values for 10 most important genes. A dotplot shows the global average importance for the top 200 genes (top right). The three scatterplots show pairs of important variables  (bottom row), indicating clear separation between classes. \label{rnacomp}}
+\end{figure}
+
+<<rnaseq_fits, echo=FALSE, eval=FALSE>>==
+# LEAVE-ONE-OUT
+# PPtree
+library(PPtreeViz)
+pptr.err <- function(idx, dd, met){
+ tr <- dd[-idx, ]
+ ppt <- PPTreeclass(Type~., data = tr, PPmethod = met)
+ pp <- PPclassify(ppt, test.data = dd[,-1], true.class = dd[,1],  Rule = 1)[[2]]
+ data.frame(err.tr = mean(pp[-idx]!=tr[,1]),
+            err.te = 1*(pp[idx]!=dd[idx,1]) )
+ 
+}
+ 
+# CART
+library(rpart)
+cart.err <- function(idx, dd){
+tr <- dd[-idx, ]
+ cart.m <- rpart(as.factor(Type)~., data = tr)
+ pp <- predict(cart.m, newdata = dd, type = "class")
+ data.frame(err.tr = mean(pp[-idx]!=tr[,1]),
+            err.te = 1*(pp[idx]!=dd[idx,1]) )
+   
+}
+ 
+# RF
+rf.err <- function(idx, dd) {
+ tr <- dd[-idx,]
+ rf <- randomForest(as.factor(Type) ~ ., data = tr)
+  pp <- predict(rf, newdata = dd[,-1], type = "class")
+  data.frame(err.tr = mean(pp[-idx]!=tr[,1]),
+             err.te = 1*(pp[idx]!=dd[idx,1]) )
+}
+
+# PP.RF
+pprf.err <- function(idx, dd, lam = 0.1, met='PDA', sp=.4) {
+  dd_sc <- data.frame(dd$Type, scale(dd[,-1]) )
+  colnames(dd_sc)[1] <- 'Type'
+  tr <- dd_sc[ -idx, ]
+  ppf.m <- PPforest(tr, "Type", std = FALSE, 
+                    size.tr = 1, m = 500, PPmethod = met,
+                    size.p = sp, lambda = lam)
+  
+  pp <- trees_pred(ppf.m, xnew = dd_sc[,-1]  )[[2]] %>% as.factor()
+  levels(pp) <- levels(dd[,1])
+  #table(ppf.m$predicting.training, pp[-idx] )
+  
+  data.frame(err.tr = mean(pp[-idx]!=tr[,1]),
+             err.te = 1*(pp[idx]!=dd[idx,1]) )
+}
+
+dd <- dat_rna
+
+ll <- list(
+      pptr.pda = t(sapply(1:16, pptr.err, dd=dd, met = "PDA")),
+      cart = t(sapply(1:16, cart.err, dd=dd)),
+      rf = t(sapply(1:16, rf.err, dd=dd)),
+      ppf.pda.4 = t(sapply(1:16, pprf.err, dd=dd, lam = 0.1, met = "PDA", sp =.4)),
+      ppf.pda.03 = t(sapply(1:16, pprf.err, dd=dd, lam = 0.1, met = "PDA", sp =.03))
+)
+
+res.rna <- lapply(ll, data.frame) %>% bind_rows( .id = 'method') %>% 
+  group_by(method) %>% 
+  summarise(err.tr = mean(as.numeric(err.tr)), 
+            err.te = mean(as.numeric(err.te))
+            )
+
+saveRDS(res.rna, 'resRNA_new.rds')  
+  
+set.seed(123)
+ppf.m <- PPforest(dd_sc, "Type", std = FALSE, 
+                   size.tr = 1, m = 500, PPmethod = "PDA",
+                   size.p = 0.03, lambda = 0.1)
+ 
+save(ppf.m,file="ppf.m.Rdata")
+
+globalimpo_rna <- ppf_global_imp(data = dd, class = 'Type', ppf.m)
+save(globalimpo_rna,file="globalimpo_rna.Rdata")  
+averimpo_rna <- ppf_avg_imp(ppf.m, "Type")
+save(averimpo_rna,file="averimpo_rna.Rdata")  
+
+# Permute the response, and check results
+dd_sc_p <- dd_sc %>% mutate(Type = sample(Type))
+ppf.m_p <- PPforest(dd_sc_p, "Type", std = FALSE, 
+                   size.tr = 1, m = 500, PPmethod = "PDA",
+                   size.p = 0.03, lambda = 0.1)
+
+globalimpo_rna <- ppf_global_imp(data = dd, class = 'Type', ppf.m)
+save(globalimpo_rna,file="globalimpo_rna.Rdata")  
+averimpo_rna <- ppf_avg_imp(ppf.m, "Type")
+save(averimpo_rna,file="averimpo_rna.Rdata")  
+
+@
+
+
+Table \ref{res_RNA} presents mean of training and test error rates from leave-one-out cross validation comparing CART, PPF, PPtree and RF. For PPF two cases are presented based on different proportions of variables considered for each node partition: PPF.4 use $40\%$ of the variables while  PPF.03 use $3\%$ of them. PPF.03, with 32 variables in each node partition, is comparable with default for RF. While PPF with $40\%$ of variables and PPtree results are the same in test error ($6.2\%$), PPF performance is better  when a smaller proportion of variables ($3\%$) is used ( $0\%$ of test error). RF presents a test error of $25\%$ using the same number of variables than PPF.03.
+
+Figure \ref{rnacomp} shows the most important genes analysed based on global average importance measure for the best model (PPF.03). The importance measure is clearly bigger for one gene (GRMZM2G046776) and there is a breaking point in the importance measure for the first seven genes. The parallel coordinate plot shows the expression values for the top 10 variables, ordered from left to right. In the left scatterplot, of first two important variables, Mo17xB73 can be clearly separated from the other genotypes. The other scatterplots show various separations between the groups. 
+
+With 1078 variables and only 16 observations, one might be suspicious about the results. To check this, the analysis was re-computed several times with permuted class labels, where the class label is randomly re-assigned to a different sample. This removes any real class structure, while keeping the multivariate distribution of the expression values fixed. The results showed no important variables, and little separation between classes. The results from PPF are substantially better.
+
+\section{Discussion}\label{discpp1}
+
+This article has presented a new ensemble method (PPF) for classification problems, that is built on an oblique tree classifier (PPtree). PPF effectively uses linear combinations of variables, incorporating the correlation between variables to build better boundaries between classes. It provides a range of diagnostics for variable importance, confusion of observations between groups and proximity of observations. PPF provides consistently low error rates, and retains the interpretability afforded by tree-based algorithms.
+
+The benchmark data study showed that PPF's predictive performance is as good, or better than, CART and PPtree, and can outperform RF for some problems. PPF performs better than RF when the classes are separated by a linear combination of variables and when the correlation between variables increases. This can be seen by comparing the variable importance diagnostics of PPF and RF, showing that different variables are combined to create the classification model.
+
+There are several directions where the work could be extended. The two projection pursuit indexes, LDA and PDA, can be readily supplemented by other indices, or by adapting a linear SVM. For example, using a regression index could extend the approach to a continuous response. Another direction is to adapt the PPtree algorithm to allow more than $g-1$ splits. This PPtree constraint protects the single tree model from overfitting. With PPF, there is some protection against this from bagging, and we expect it would enable deeper non-linear boundaries to be constructed. Lastly, because the accuracy of each tree is collected, automatic pruning of poor performing trees is a possibility.
+
+
+\section{Acknowledgements}
+\label{Aknow}
+
+This paper was written with the R packages knitr~(\cite{xie:2015}), ggplot2 (\cite{hadley:2009}) and dplyr (\cite{dplyr}), and the files to reproduce the paper and results is available at \url{https://github.com/natydasilva/PPforestpaper}.
+
+The authors are grateful for the helpful reviews provided by the editor, associate editor and two anonymous reviewers. 
+
+
+\bibliographystyle{jasa3}
+\bibliography{ppforestpaperbib}
+
+\end{document}

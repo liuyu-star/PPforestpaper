@@ -1,0 +1,191 @@
+\begin{thebibliography}{34}
+\newcommand{\enquote}[1]{``#1''}
+\expandafter\ifx\csname natexlab\endcsname\relax\def\natexlab#1{#1}\fi
+\expandafter\ifx\csname url\endcsname\relax
+  \def\url#1{{\tt #1}}\fi
+\expandafter\ifx\csname urlprefix\endcsname\relax\def\urlprefix{URL }\fi
+
+\bibitem[\protect\citeauthoryear{Amit and Geman}{Amit and
+  Geman}{1997}]{amit1997shape}
+Amit, Y. and Geman, D. (1997), \enquote{Shape quantization and recognition with
+  randomized trees,} {\em Neural computation\/}, 9, 1545--1588.
+
+\bibitem[\protect\citeauthoryear{Athreya and Lahiri}{Athreya and
+  Lahiri}{2006}]{athreya2006measure}
+Athreya, K.~B. and Lahiri, S.~N. (2006), {\em Measure theory and probability
+  theory\/}, Springer Science \& Business Media.
+
+\bibitem[\protect\citeauthoryear{Biau, Devroye, and Lugosi}{Biau
+  et~al.}{2008}]{Biau:2008}
+Biau, G., Devroye, L., and Lugosi, G. (2008), \enquote{Consistency of Random
+  Forests and Other Averaging Classifiers,} {\em J. Mach. Learn. Res.\/}, 9,
+  2015--2033,
+  \urlprefix\url{http://dl.acm.org/citation.cfm?id=1390681.1442799}.
+
+\bibitem[\protect\citeauthoryear{Breiman}{Breiman}{1996{\natexlab{a}}}]{breiman1996bagging}
+Breiman, L. (1996{\natexlab{a}}), \enquote{Bagging predictors,} {\em Machine
+  learning\/}, 24, 123--140.
+
+\bibitem[\protect\citeauthoryear{Breiman}{Breiman}{1996{\natexlab{b}}}]{breiman1996heuristics}
+--- (1996{\natexlab{b}}), \enquote{Heuristics of instability and stabilization
+  in model selection,} {\em The annals of statistics\/}, 24, 2350--2383.
+
+\bibitem[\protect\citeauthoryear{Breiman}{Breiman}{2001}]{breiman2001random}
+--- (2001), \enquote{Random forests,} {\em Machine learning\/}, 45, 5--32.
+
+\bibitem[\protect\citeauthoryear{Brodley and Utgoff}{Brodley and
+  Utgoff}{1995}]{brodley}
+Brodley, C.~E. and Utgoff, P.~E. (1995), \enquote{Multivariate decision trees,}
+  {\em Machine learning\/}, 19, 45--77.
+
+\bibitem[\protect\citeauthoryear{Chang and Luraschi}{Chang and
+  Luraschi}{2016}]{profvis}
+Chang, W. and Luraschi, J. (2016), \enquote{\texttt{profvis}: Interactive
+  Visualizations for Profiling R Code,} Version 0.3.2.
+
+\bibitem[\protect\citeauthoryear{Cook, Hofmann, Lee, Yang, Nikolau, and
+  Wurtele}{Cook et~al.}{2007}]{cook2007exploring}
+Cook, D., Hofmann, H., Lee, E.-K., Yang, H., Nikolau, B., and Wurtele, E.
+  (2007), \enquote{Exploring gene expression data, using plots,} {\em Journal
+  of Data Science\/}, 5, 151.
+
+\bibitem[\protect\citeauthoryear{Cortes and Vapnik}{Cortes and
+  Vapnik}{1995}]{Cortes1995}
+Cortes, C. and Vapnik, V. (1995), \enquote{Support-vector networks,} {\em
+  Machine Learning\/}, 20, 273--297,
+  \urlprefix\url{https://doi.org/10.1007/BF00994018}.
+
+\bibitem[\protect\citeauthoryear{da~Silva, Lee, and Cook}{da~Silva
+  et~al.}{2018}]{PPforestpkg}
+da~Silva, N., Lee, E.-K., and Cook, D. (2018), {\em PPforest: Projection
+  Pursuit Classification Forest\/},
+  \urlprefix\url{https://CRAN.R-project.org/package=PPforest}. R package
+  version 0.1.1.
+
+\bibitem[\protect\citeauthoryear{Datta and Nettleton}{Datta and
+  Nettleton}{2014}]{datta2014statistical}
+Datta, S. and Nettleton, D. (2014), {\em Statistical analysis of next
+  generation sequencing data\/}, volume~15, Springer.
+
+\bibitem[\protect\citeauthoryear{Do, Lenca, Lallich, and Pham}{Do
+  et~al.}{2010}]{do2010classifying}
+Do, T.-N., Lenca, P., Lallich, S., and Pham, N.-K. (2010), \enquote{Classifying
+  very-high-dimensional data with random forests of oblique decision trees,} in
+  {\em Advances in knowledge discovery and management\/}, Springer, 39--55.
+
+\bibitem[\protect\citeauthoryear{Eddelbuettel, Fran{\c{c}}ois, Allaire,
+  Chambers, Bates, and Ushey}{Eddelbuettel et~al.}{2011}]{eddelbuettel2011rcpp}
+Eddelbuettel, D., Fran{\c{c}}ois, R., Allaire, J., Chambers, J., Bates, D., and
+  Ushey, K. (2011), \enquote{Rcpp: Seamless R and C++ integration,} {\em
+  Journal of Statistical Software\/}, 40, 1--18.
+
+\bibitem[\protect\citeauthoryear{Friedman and Tukey}{Friedman and
+  Tukey}{1974}]{friedman1973projection}
+Friedman, J.~H. and Tukey, J.~W. (1974), \enquote{A projection pursuit
+  algorithm for exploratory data analysis,} {\em IEEE Transactions on
+  computers\/}, 100, 881--890.
+
+\bibitem[\protect\citeauthoryear{Ho}{Ho}{1998}]{ho1998random}
+Ho, T.~K. (1998), \enquote{The random subspace method for constructing decision
+  forests,} {\em Pattern Analysis and Machine Intelligence, IEEE Transactions
+  on\/}, 20, 832--844.
+
+\bibitem[\protect\citeauthoryear{Huber}{Huber}{1990}]{huber1990data}
+Huber, P. (1990), \enquote{Data analysis and projection pursuit,} in {\em
+  Technical report PJH-90-1\/}, Dept. of Mathematics, Massachusetts Institute
+  of Technology Cambridge, MA.
+
+\bibitem[\protect\citeauthoryear{Kim and Loh}{Kim and Loh}{2001}]{kim2001}
+Kim, H. and Loh, W.-Y. (2001), \enquote{Classification trees with unbiased
+  multiway splits,} {\em Journal of the American Statistical Association\/},
+  96.
+
+\bibitem[\protect\citeauthoryear{Kruskal}{Kruskal}{1969}]{kruskal1969toward}
+Kruskal, J.~B. (1969), \enquote{Toward a practical method which helps uncover
+  the structure of a set of multivariate observations by finding the linear
+  transformation which optimizes a new ‘index of condensation’,} in {\em
+  Statistical Computation\/}, Academic Press, New York.
+
+\bibitem[\protect\citeauthoryear{Lee}{Lee}{2018}]{PPtreeViz}
+Lee, E.-K. (2018), \enquote{{PPtreeViz}: An {R} Package for Visualizing
+  Projection Pursuit Classification Trees,} {\em Journal of Statistical
+  Software\/}, 83, 1--30.
+
+\bibitem[\protect\citeauthoryear{Lee and Cook}{Lee and
+  Cook}{2010}]{lee2010projection}
+Lee, E.-K. and Cook, D. (2010), \enquote{A projection pursuit index for large p
+  small n data,} {\em Statistics and Computing\/}, 20, 381--392.
+
+\bibitem[\protect\citeauthoryear{Lee, Cook, Klinke, and Lumley}{Lee
+  et~al.}{2005}]{lee2005projection}
+Lee, E.-K., Cook, D., Klinke, S., and Lumley, T. (2005), \enquote{Projection
+  pursuit for exploratory supervised classification,} {\em Journal of
+  Computational and Graphical Statistics\/}, 14.
+
+\bibitem[\protect\citeauthoryear{Lee, Cook, Park, and Lee}{Lee
+  et~al.}{2013}]{lee2013pptree}
+Lee, Y.~D., Cook, D., Park, J.-w., and Lee, E.-K. (2013), \enquote{{PPtree}:
+  Projection pursuit classification tree,} {\em Electronic Journal of
+  Statistics\/}, 7, 1369--1386.
+
+\bibitem[\protect\citeauthoryear{Lichman}{Lichman}{2013}]{Lichman}
+Lichman, M. (2013), \enquote{{UCI} Machine Learning Repository,}
+  \urlprefix\url{http://archive.ics.uci.edu/ml}.
+
+\bibitem[\protect\citeauthoryear{Menze, Kelm, Splitthoff, Koethe, and
+  Hamprecht}{Menze et~al.}{2011}]{menze2011oblique}
+Menze, B.~H., Kelm, B.~M., Splitthoff, D.~N., Koethe, U., and Hamprecht, F.~A.
+  (2011), \enquote{On oblique random forests,} in {\em Machine Learning and
+  Knowledge Discovery in Databases\/}, Springer, 453--469.
+
+\bibitem[\protect\citeauthoryear{Paschold, Jia, Marcon, Lund, Larson, Yeh,
+  Ossowski, Lanz, Nettleton, Schnable et~al.}{Paschold
+  et~al.}{2012}]{paschold2012}
+Paschold, A., Jia, Y., Marcon, C., Lund, S., Larson, N.~B., Yeh, C.-T.,
+  Ossowski, S., Lanz, C., Nettleton, D., Schnable, P.~S., et~al. (2012),
+  \enquote{Complementation contributes to transcriptome complexity in maize
+  (Zea mays L.) hybrids relative to their inbred parents,} {\em Genome
+  research\/}, 22, 2445--2454.
+
+\bibitem[\protect\citeauthoryear{{R Core Team}}{{R Core Team}}{2019}]{RCore}
+{R Core Team} (2019), {\em R: A Language and Environment for Statistical
+  Computing\/}, R Foundation for Statistical Computing, Vienna, Austria,
+  \urlprefix\url{https://www.R-project.org/}.
+
+\bibitem[\protect\citeauthoryear{Tan and Dowe}{Tan and Dowe}{2004}]{tan2005mml}
+Tan, P.~J. and Dowe, D.~L. (2004), \enquote{MML inference of oblique decision
+  trees,} in {\em AI 2004: Advances in Artificial Intelligence\/}, Springer,
+  1082--1088.
+
+\bibitem[\protect\citeauthoryear{Tan and Dowe}{Tan and
+  Dowe}{2006}]{tan2006decision}
+--- (2006), \enquote{Decision forests with oblique decision trees,} in {\em
+  MICAI 2006: Advances in Artificial Intelligence\/}, Springer, 593--603.
+
+\bibitem[\protect\citeauthoryear{Therneau, Atkinson, and Ripley}{Therneau
+  et~al.}{2010}]{therneau2010rpart}
+Therneau, T.~M., Atkinson, B., and Ripley, M.~B. (2010), \enquote{The rpart
+  package,} .
+
+\bibitem[\protect\citeauthoryear{Truong}{Truong}{2009}]{truong2009fast}
+Truong, A. (2009), \enquote{Fast growing and interpretable oblique trees via
+  probabilistic models,} {\em Univ. of Oxford, A thesis submitted for the
+  degree of Doctor of Philosophy, Trinity term\/}, 1--119.
+
+\bibitem[\protect\citeauthoryear{Wickham}{Wickham}{July 2009}]{hadley:2009}
+Wickham, H. (July 2009), {\em ggplot2: Elegant graphics for data analysis\/},
+  {useR}, Springer.
+
+\bibitem[\protect\citeauthoryear{Wickham, Francois, and Rstudio}{Wickham
+  et~al.}{2015}]{dplyr}
+Wickham, H., Francois, R., and Rstudio (2015), \enquote{{\tt dplyr}: A Grammar
+  of data manipulation,}
+  \url{http://cran.r-project.org/web/packages/dplyr/index.html}. Maintained by
+  Wickham, H.
+
+\bibitem[\protect\citeauthoryear{Xie}{Xie}{2015}]{xie:2015}
+Xie, Y. (2015), {\em Dynamic documents with {R} and knitr\/}, Boca Raton,
+  Florida: Chapman and Hall/CRC, 2nd edition,
+  \urlprefix\url{http://yihui.name/knitr/}. ISBN 978-1498716963.
+
+\end{thebibliography}
