@@ -1,6 +1,6 @@
 README
-
-This paper can be reproduced compiling paper.Rnw file that contains text and code to reproduce the paper. You need to include in the same project  paper.Rnw file and the following files:
+======================
+This repository contain all the needed files to reproduce the JCGS paper "A Projection Pursuit Forest Algorithm for Supervised Classificationcan". Compiling paper.Rnw file which contains text and code you can reproduce the paper (important this include pre-processd results ). You need to include in the same project, paper.Rnw file and the following files:
   
 1. preformance_timesWTplyrnew.Rdata : Data to reproduce Figure 5
 2. table_raw.Rdata :  data to do Table2 and Figure 6
@@ -11,5 +11,5 @@ This paper can be reproduced compiling paper.Rnw file that contains text and cod
 
 If you want to run some of the intermediate results all the complete code is included in a separate file
 
-codeJCGS.R : Code to reproduce  all the paper results
+codeJCGS.R : Code to reproduce  all the intermediate paper results
 
