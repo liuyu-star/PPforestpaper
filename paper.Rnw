@@ -624,7 +624,7 @@ The results show that PPF has a better performance in the test data set than the
 <<benchcode,echo=FALSE, message=FALSE, warning = FALSE,results='asis'>>=
 # the code to replicate this is in additionalcode.R
 
-load("table.raw.Rdata")
+load("table_raw.Rdata")
 
 tt1 <- table.raw %>%
   separate(method, into = c('met','b')) %>%
@@ -667,7 +667,7 @@ Figures \ref{parallel} displays the performance comparison graphically. Each lin
 
 \begin{figure}[!hbpt]
 <<parbench, depenson="benchpl",echo=FALSE, message=FALSE, warning=FALSE, fig.height=4>>=
-load("table.raw.Rdata")
+load("table_raw.Rdata")
 tbl1 <- table.raw %>%rename(Data=data) %>% 
   inner_join(select(tbl2, Correlation, Data) ) %>%
   arrange(desc(Correlation)) %>% 
@@ -1019,7 +1019,7 @@ dd_sc <- data.frame(dd$Type, scale(dd[,-1]) )
   colnames(dd_sc)[1] <- 'Type'
   set.seed(123)
 
-load("ppf.m.Rdata")
+load("ppf_m.Rdata")
 load("globalimpo_rna.Rdata")
 load("averimpo_rna.Rdata")
 imp_genes10 <- globalimpo_rna %>% slice(1:10) %>% pull(variable) %>% as.character()
@@ -1130,7 +1130,7 @@ ppf.m <- PPforest(dd_sc, "Type", std = FALSE,
                    size.tr = 1, m = 500, PPmethod = "PDA",
                    size.p = 0.03, lambda = 0.1)
  
-save(ppf.m,file="ppf.m.Rdata")
+save(ppf.m,file="ppf_m.Rdata")
 
 globalimpo_rna <- ppf_global_imp(data = dd, class = 'Type', ppf.m)
 save(globalimpo_rna,file="globalimpo_rna.Rdata")  
